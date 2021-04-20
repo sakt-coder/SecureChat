@@ -4,89 +4,77 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 
 import MyTor.TorSocket;
-import models.*;
+import models.Message;
+import models.MessageContent;
+import models.Request;
+import models.SignupClass;
+import models.SystemMessage;
+import models.User;
 
-public class ClientHandler implements Runnable
-{
+public class ClientHandler implements Runnable {
 	Server server;
 	TorSocket socket;
 	String username;
-	ClientHandler(Server server,TorSocket socket)
-	{
+	ClientHandler(Server server,TorSocket socket) {
 		this.server=server;
 		this.socket=socket;
 	}
-	public void run()
-	{
-		try
-		{
+	public void run() {
+		try {
 			readLogin();
 		}
-		catch(Exception e)
-		{
+		catch(Exception e) {
 			e.printStackTrace();
 		}
 	}
-	private void readLogin()throws Exception
-	{
+	private void readLogin()throws Exception {
 		//Reading Login Details of Client
 		Object obj=socket.readObject();
 
-		//If existing user login, then we receive a securechat.server.User object
-		if(obj instanceof User)
-		{
+		//If existing user login, then we receive a User object
+		if(obj instanceof User) {
 			User user=(User)obj;
-			if(authenticate(user))
-			{
+			if(authenticate(user)) {
 				username=user.username;
 				sendSystemMessage("Login Success");
 				server.msh.remove(user.username,socket);//Display old messages
 				startService();
-			}
-			else
+			} else {
 				sendSystemMessage("Invalid Login");
+			}
 			this.socket.close();
 		}
-		//If new user login, then we receive a securechat.server.SignupClass Object
-		else
-		{
+		//If new user login, then we receive a SignupClass Object
+		else {
 			SignupClass temp=(SignupClass)obj;
 			server.msh.insertUser(temp);
 			sendSystemMessage("Login Success");
-			System.out.println("securechat.server.User added");
+			System.out.println("User added");
 			username=temp.username;
 			startService();
 		}
 	}
 
-	private void startService()throws Exception
-	{
+	private void startService()throws Exception {
 		server.activeUserMap.put(username,socket);//add user to activeUserMap
-		while(true)
-		{
+		while(true) {
 			Object obj=socket.readObject();
-			if(obj instanceof Message)
-			{
+			if(obj instanceof Message) {
 				Message ms=(Message)obj;
 				MessageContent mc=(MessageContent)socket.readObject();
 
 				String receiver = ms.getTo();
 				TorSocket tsTo=find(receiver);
-				if(tsTo!=null)//If user is online
-				{
+				if(tsTo!=null) { //If user is online
 					tsTo.writeObject(ms);
 					tsTo.writeObject(mc);
 					tsTo.flush();
+				} else { //If user is offline
+					server.msh.insertMessage(receiver, ms, mc);
 				}
-				else //If user is offline 
-					server.msh.insertMessage(receiver,ms,mc);
-			}
-			else if(obj instanceof SystemMessage)//If we receive a system message to logout
-			{
+			} else if(obj instanceof SystemMessage) {//If we receive a system message to logout
 				break;
-			}
-			else if(obj instanceof Request)//securechat.server.Request for PublicKey
-			{
+			} else if(obj instanceof Request) {//Request for PublicKey
 				Request req=(Request)obj;
 				String query="SELECT PublicKey FROM UserTable WHERE UserName='"+req.username+"'";
 				String publicKey=null;
@@ -104,29 +92,24 @@ public class ClientHandler implements Runnable
 		logout();
 	}
 
-	private TorSocket find(String receiver)
-	{
+	private TorSocket find(String receiver) {
 		return server.activeUserMap.getOrDefault(receiver,null);
 	}
 
-	private void logout()throws Exception
-	{
+	private void logout()throws Exception {
 		server.activeUserMap.remove(username);
 		sendSystemMessage("Logged Out");
 	}
-	private void sendSystemMessage(String note)throws Exception
-	{
+	private void sendSystemMessage(String note)throws Exception {
 		SystemMessage sm=new SystemMessage(note);
 		socket.writeObject(sm);
 		socket.flush();
 	}
-	private boolean authenticate(User user)throws Exception
-	{
+	private boolean authenticate(User user)throws Exception {
 		String query="SELECT Password FROM UserTable WHERE UserName='"+user.username+"'";
 		Statement st=server.connection.createStatement();
 		ResultSet rs=st.executeQuery(query);
-		if(rs.next())
-		{
+		if(rs.next()) {
 			return user.password.equals(rs.getString("Password"));
 		}
 		return false;

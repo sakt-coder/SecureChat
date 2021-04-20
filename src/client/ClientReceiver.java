@@ -1,48 +1,44 @@
 package client;
 
-import java.sql.*;
-import java.util.*;
-import java.security.spec.*;
-import java.security.*;
-import javax.crypto.*;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.Base64;
+import javax.crypto.Cipher;
+
 import javafx.application.Platform;
 import models.Message;
 import models.MessageContent;
 import models.SystemMessage;
 
-//ClientReceiver is a thread that runs in the background listening for messages
-public class ClientReceiver implements Runnable
-{
+public class ClientReceiver implements Runnable {
+
 	Client client;
 	ClientWindowController controller;
 	StringBuilder msb;
-	public ClientReceiver(Client client)
-	{
+
+	public ClientReceiver(Client client) {
 		this.client=client;
 		msb=new StringBuilder();
 	}
-	public void setController(ClientWindowController controller)
-	{
+	public void setController(ClientWindowController controller) {
 		this.controller=controller;
 	}
-	public void run()
-	{
-		try
-		{
+	public void run() {
+		try {
 			listen();
-		}
-		catch(Exception e)
-		{
+		} catch(Exception e) {
 			e.printStackTrace();
 		}
 	}
-	private void listen()throws Exception
-	{
-		while(true)
-		{
+	private void listen()throws Exception {
+		while(true) {
 			Object obj=client.tos.readObject();
-			if(obj instanceof Message)
-			{
+			if(obj instanceof Message) {
 				MessageContent mc=(MessageContent)client.tos.readObject();
 
 				//get privatekey
@@ -74,9 +70,7 @@ public class ClientReceiver implements Runnable
 						controller.MessageLabel.setText(msb.length()==0?"You have no messages":msb.toString());
 					}
 				});
-			}
-			else if(obj instanceof SystemMessage)
-			{
+			} else if(obj instanceof SystemMessage) {
 				SystemMessage sm=(SystemMessage)obj;
 
 				Platform.runLater(new Runnable(){
@@ -92,9 +86,7 @@ public class ClientReceiver implements Runnable
 					client.tos.close();
 					break;
 				}
-			}
-			else if(obj instanceof String)
-			{
+			} else if(obj instanceof String) {
 		        KeyFactory factory=KeyFactory.getInstance("RSA");
 				PublicKey puk=(PublicKey)factory.generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode((String)obj)));
 		        controller.publicKey=puk;

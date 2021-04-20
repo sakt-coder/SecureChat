@@ -5,7 +5,12 @@ import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-import models.*;
+import models.Message;
+import models.MessageContent;
+import models.Request;
+import models.SignupClass;
+import models.SystemMessage;
+import models.User;
 
 import javax.crypto.Cipher;
 import java.nio.charset.StandardCharsets;
@@ -17,8 +22,7 @@ import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.util.Base64;
 
-public class ClientWindowController
-{
+public class ClientWindowController {
     @FXML TextField username;
     @FXML PasswordField password;
     @FXML Label MessageLabel;
@@ -31,8 +35,7 @@ public class ClientWindowController
     boolean isLogged;
     PublicKey publicKey;
 
-    private String hash(String s)throws Exception
-    {
+    private String hash(String s)throws Exception {
         MessageDigest digest=MessageDigest.getInstance("SHA-256");
         byte[] encodedhash=digest.digest(s.getBytes(StandardCharsets.UTF_8));
         StringBuilder hexString=new StringBuilder();
@@ -44,8 +47,7 @@ public class ClientWindowController
         return hexString.toString();
     }
 
-    public void SignIn()throws Exception
-    {
+    public void SignIn()throws Exception {
         if (isLogged) {
             LoginStatus.setText("Logout First");
         } else {
@@ -55,8 +57,7 @@ public class ClientWindowController
             client.tos.flush();
         }
     }
-    public void SignUp()throws Exception
-    {
+    public void SignUp()throws Exception {
         if (isLogged) {
             LoginStatus.setText("Logout First");
         } else {
@@ -85,8 +86,7 @@ public class ClientWindowController
             client.tos.flush();
         }
     }
-    public void logout()throws Exception
-    {
+    public void logout()throws Exception {
         if(!isLogged)
             return;
         SystemMessage sm=new SystemMessage("Logout");
@@ -94,8 +94,7 @@ public class ClientWindowController
         client.tos.close();
         MessageLabel.setText("Messages will be displayed here");
     }
-    public void SendMessage()throws Exception
-    {
+    public void SendMessage()throws Exception {
         //request publicKey
         Request req=new Request(SendTo.getText(),client.username);
         client.tos.writeObject(req);

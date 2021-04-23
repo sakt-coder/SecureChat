@@ -4,41 +4,57 @@ import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SealedObject;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.Serializable;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.security.*;
+import java.util.Arrays;
+import java.util.Base64;
+
+import static client.Constants.AES_KEY_SIZE;
+import static client.Constants.RSA_KEY_SIZE;
 
 public class TestEncryption {
     public static void main(String args[])throws Exception {
-        Serializable obj = "Hello";
-        SecretKey AESKey[] = new SecretKey[4];
-        for(int i=0;i<4;i++)
-            AESKey[i] = genAESKey();
-        for(int i=0;i<4;i++)
-            obj = AESEncrypt(obj, AESKey[i]);
-        for(int i=3;i>=0;i--)
-            obj = (Serializable) AESDecrypt((SealedObject) obj, AESKey[i]);
-        System.out.println((String)obj);
+        SecretKey AESKey = genAESKey();
+        String msg = "hello";
+        String enc = AESEncrypt(msg, AESKey);
+        String dec = AESDecrypt(enc, AESKey);
+        System.out.println(dec);
     }
     private static SecretKey genAESKey() throws NoSuchAlgorithmException {
         KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
-        keyGenerator.init(128);
-        SecretKey key = keyGenerator.generateKey();
-        return key;
+        keyGenerator.init(AES_KEY_SIZE);
+        return keyGenerator.generateKey();
     }
-    static SealedObject AESEncrypt(Serializable obj, SecretKey AESKey)throws Exception {
+    private static KeyPair genRSAKeyPair() throws NoSuchAlgorithmException {
+        KeyPairGenerator keyGen=KeyPairGenerator.getInstance("RSA");
+        keyGen.initialize(RSA_KEY_SIZE);
+        return keyGen.genKeyPair();
+    }
+    private static String RSAEncrypt(String plainText, PublicKey publicKey)throws Exception {
+        Cipher cipher=Cipher.getInstance("RSA");
+        cipher.init(Cipher.ENCRYPT_MODE,publicKey);
+        byte[] cipherText = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(cipherText);
+    }
+    private static String RSADecrypt(String cipherText, PrivateKey privateKey)throws Exception {
+        Cipher cipher=Cipher.getInstance("RSA");
+        cipher.init(Cipher.DECRYPT_MODE,privateKey);
+        byte[] plainText = cipher.doFinal(Base64.getDecoder().decode(cipherText));
+        return new String(plainText);
+    }
+    private static String AESEncrypt(String plainText, SecretKey AESKey)throws Exception {
         Cipher cipher=Cipher.getInstance("AES");
         cipher.init(Cipher.ENCRYPT_MODE, AESKey);
-        return new SealedObject(obj,cipher);
+        byte[] cipherText = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(cipherText);
     }
-    static Object AESDecrypt(SealedObject obj, SecretKey AESKey)throws Exception {
+    private static String AESDecrypt(String cipherText, SecretKey AESKey)throws Exception {
         Cipher cipher=Cipher.getInstance("AES");
         cipher.init(Cipher.DECRYPT_MODE, AESKey);
-        return(obj.getObject(cipher));
-    }
-    static Object RSADecrypt(SealedObject obj, PrivateKey privateKey)throws Exception {
-        Cipher cipher=Cipher.getInstance("RSA");
-        cipher.init(Cipher.DECRYPT_MODE, privateKey);
-        return obj.getObject(cipher);
+        byte[] plainText = cipher.doFinal(Base64.getDecoder().decode(cipherText));
+        return new String(plainText);
     }
 }

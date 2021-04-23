@@ -5,7 +5,6 @@ import java.sql.Statement;
 
 import MyTor.TorSocket;
 import models.Message;
-import models.MessageContent;
 import models.Request;
 import models.SignupClass;
 import models.SystemMessage;
@@ -61,16 +60,14 @@ public class ClientHandler implements Runnable {
 			Object obj=socket.readObject();
 			if(obj instanceof Message) {
 				Message ms=(Message)obj;
-				MessageContent mc=(MessageContent)socket.readObject();
 
-				String receiver = ms.getTo();
+				String receiver = ms.to;
 				TorSocket tsTo=find(receiver);
 				if(tsTo!=null) { //If user is online
 					tsTo.writeObject(ms);
-					tsTo.writeObject(mc);
 					tsTo.flush();
 				} else { //If user is offline
-					server.msh.insertMessage(receiver, ms, mc);
+					server.msh.insertMessage(receiver, ms);
 				}
 			} else if(obj instanceof SystemMessage) {//If we receive a system message to logout
 				break;

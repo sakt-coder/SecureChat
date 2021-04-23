@@ -5,26 +5,17 @@ import java.sql.Timestamp;
 
 public class Message implements Serializable {
 
-	private String from;
-	private String to;
-	private Timestamp sentTime;
+	public String from;
+	public String to;
+	public Timestamp sentTime;
+	public String content;
+	public String AESKey;
 
-	public Message(String from,String to,Timestamp sentTime) {
+	public Message(String from,String to,Timestamp sentTime, String content, String AESKey) {
 		this.from=from;
 		this.to=to;
 		this.sentTime=sentTime;
-	}
-	public String getFrom() {
-		return from;
-	}
-	public String getTo() {
-		return to;
-	}
-	public Timestamp getSentTime() {
-		return sentTime;
-	}
-	public String toString() {
-		String s=from+": "+" "+sentTime+"\n";
-		return s;
+		this.content=content;
+		this.AESKey=AESKey;
 	}
 }

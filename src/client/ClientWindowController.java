@@ -6,21 +6,22 @@ import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import models.Message;
-import models.MessageContent;
 import models.Request;
 import models.SignupClass;
 import models.SystemMessage;
 import models.User;
 
 import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.MessageDigest;
-import java.security.PublicKey;
+import java.security.*;
 import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.util.Base64;
+
+import static client.Constants.AES_KEY_SIZE;
+import static client.Constants.RSA_KEY_SIZE;
 
 public class ClientWindowController {
     @FXML TextField username;
@@ -63,22 +64,26 @@ public class ClientWindowController {
         } else {
             client=new Client(this,username.getText());
 
-            //generate keyPair
-            KeyPairGenerator keyGen=KeyPairGenerator.getInstance("RSA");
-            keyGen.initialize(512);
-            KeyPair keyPair=keyGen.genKeyPair();
-            //convert keyPair to string
+            //generate RSA Keys
+            KeyPair keyPair = genRSAKeyPair();
             String publicKey=Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
             String privateKey=Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
-            //create database
+
+            //create PrivateKey Table
             String table=client.username+"PrivateKey";
             String query="CREATE TABLE "+table+" ( PrivateKey varchar(2048) )";
             PreparedStatement preStat=client.connection.prepareStatement(query);
             preStat.executeUpdate();
-            //store private key in database
+            //store private key in Private Key Table
             query="INSERT INTO "+table+" VALUES (?)";
             preStat=client.connection.prepareStatement(query);
             preStat.setString(1,privateKey);
+            preStat.executeUpdate();
+
+            //create Message Table
+            table=client.username+"MessageTable";
+            query="CREATE TABLE "+table+" ( Sender varchar(11) , Message text(2000) , Time timestamp )";
+            preStat=client.connection.prepareStatement(query);
             preStat.executeUpdate();
 
             SignupClass temp=new SignupClass(username.getText(),hash(password.getText()),publicKey);
@@ -101,20 +106,45 @@ public class ClientWindowController {
         client.tos.flush();
         
         Thread.sleep(4000);
-        
-        //encrypt message
-        String content=SendMessageText.getText();
-        Cipher cipher=Cipher.getInstance("RSA");
-        cipher.init(Cipher.ENCRYPT_MODE,publicKey);
-        content=Base64.getEncoder().encodeToString(cipher.doFinal(content.getBytes()));
 
-        Message ms=new Message(client.username,SendTo.getText(),new Timestamp(System.currentTimeMillis()));
-        MessageContent mc=new MessageContent(content);
+        //generate AESKey
+        SecretKey AESKey = genAESKey();
+        String AESKeyString = Base64.getEncoder().encodeToString(AESKey.getEncoded());
+        
+        //encrypt Message
+        String content=SendMessageText.getText();
+        content = AESEncrypt(content, AESKey);
+
+        //encrypt Key
+        String EncryptedAESKey = RSAEncrypt(AESKeyString, publicKey);
+
+        Message ms=new Message(client.username,SendTo.getText(),new Timestamp(System.currentTimeMillis()), content, EncryptedAESKey);
 
         client.tos.writeObject(ms);
-        client.tos.writeObject(mc);
         client.tos.flush();
 
         MessageSent.setText("Sent Message"+(count>0?"("+count+++")":""));
+    }
+    private SecretKey genAESKey() throws NoSuchAlgorithmException {
+        KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+        keyGenerator.init(AES_KEY_SIZE);
+        return keyGenerator.generateKey();
+    }
+    private KeyPair genRSAKeyPair() throws NoSuchAlgorithmException {
+        KeyPairGenerator keyGen=KeyPairGenerator.getInstance("RSA");
+        keyGen.initialize(RSA_KEY_SIZE);
+        return keyGen.genKeyPair();
+    }
+    private static String RSAEncrypt(String plainText, PublicKey publicKey)throws Exception {
+        Cipher cipher=Cipher.getInstance("RSA");
+        cipher.init(Cipher.ENCRYPT_MODE,publicKey);
+        byte[] cipherText = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(cipherText);
+    }
+    private static String AESEncrypt(String plainText, SecretKey AESKey)throws Exception {
+        Cipher cipher=Cipher.getInstance("AES");
+        cipher.init(Cipher.ENCRYPT_MODE, AESKey);
+        byte[] cipherText = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(cipherText);
     }
 }

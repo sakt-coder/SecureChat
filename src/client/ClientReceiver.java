@@ -7,12 +7,14 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.util.Base64;
 import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 
 import javafx.application.Platform;
 import models.Message;
-import models.MessageContent;
 import models.SystemMessage;
 
 public class ClientReceiver implements Runnable {
@@ -39,7 +41,6 @@ public class ClientReceiver implements Runnable {
 		while(true) {
 			Object obj=client.tos.readObject();
 			if(obj instanceof Message) {
-				MessageContent mc=(MessageContent)client.tos.readObject();
 
 				//get privatekey
 				String table=client.username+"PrivateKey";
@@ -56,14 +57,20 @@ public class ClientReceiver implements Runnable {
 
 				//decrypt message
 				Message ms=(Message)obj;
-				String content=mc.getContent();
-				Cipher cipher=Cipher.getInstance("RSA");
-				cipher.init(Cipher.DECRYPT_MODE,prk);
-				content=new String(cipher.doFinal(Base64.getDecoder().decode(content)));
-				
+				String AESKeyString = RSADecrypt(ms.AESKey , prk);
+
+				byte[] decodedKey = Base64.getDecoder().decode(AESKeyString);
+				SecretKey AESKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
+
+				String content = AESDecrypt(ms.content, AESKey);
+
+				//Append message to database
+				query="INSERT INTO "+client.username+"MessageTable VALUES ('"+ms.from+"', '"+content+"', '"+ms.sentTime+"')";
+				st=client.connection.createStatement();
+				st.executeUpdate(query);
+
 				//Append message to screen
-				String s=ms.getFrom()+": "+content+" "+ms.getSentTime()+"\n";
-				System.out.println(s);
+				String s=ms.from+": "+content+" "+ms.sentTime+"\n";
 				msb.append(s);
 				Platform.runLater(new Runnable(){
 					public void run(){
@@ -76,8 +83,12 @@ public class ClientReceiver implements Runnable {
 				Platform.runLater(new Runnable(){
 					public void run(){
 						controller.LoginStatus.setText(sm.note);
-						if(sm.note.equals("Login Success"))
-							controller.isLogged=true;
+						if(sm.note.equals("Login Success")) {
+							controller.isLogged = true;
+							try {
+								displayMessages();
+							} catch(Exception e) { }
+						}
 						else if(sm.note.equals("Logged Out"))
 							controller.isLogged=false;
 					}
@@ -92,5 +103,36 @@ public class ClientReceiver implements Runnable {
 		        controller.publicKey=puk;
 			}
 		}
+	}
+	void displayMessages()throws Exception {
+		String table=client.username+"MessageTable";
+		String query="SELECT * FROM "+table;
+		Statement st=client.connection.createStatement();
+		ResultSet result=st.executeQuery(query);
+
+		while(result.next()) {
+			String from = result.getString("Sender");
+			String content = result.getString("Message");
+			Timestamp sentTime = result.getTimestamp("Time");
+			String s=from+": "+content+" "+sentTime+"\n";
+			msb.append(s);
+		}
+		Platform.runLater(new Runnable(){
+			public void run(){
+				controller.MessageLabel.setText(msb.length()==0?"You have no messages":msb.toString());
+			}
+		});
+	}
+	private static String RSADecrypt(String cipherText, PrivateKey privateKey)throws Exception {
+		Cipher cipher=Cipher.getInstance("RSA");
+		cipher.init(Cipher.DECRYPT_MODE,privateKey);
+		byte[] plainText = cipher.doFinal(Base64.getDecoder().decode(cipherText));
+		return new String(plainText);
+	}
+	private static String AESDecrypt(String cipherText, SecretKey AESKey)throws Exception {
+		Cipher cipher=Cipher.getInstance("AES");
+		cipher.init(Cipher.DECRYPT_MODE, AESKey);
+		byte[] plainText = cipher.doFinal(Base64.getDecoder().decode(cipherText));
+		return new String(plainText);
 	}
 }
